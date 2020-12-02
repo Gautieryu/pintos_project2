@@ -41,8 +41,8 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   char * save_ptr;
-  fn_copy2 = strtok_r (fn_copy2, " ", &save_ptr);
-  tid = thread_create (fn_copy2, PRI_DEFAULT, start_process, fn_copy);
+  fn_copy2 = strtok_r (fn_copy2, " ", &save_ptr);//在这里两个fn_copy的作用开始不同了
+  tid = thread_create(fn_copy2, PRI_DEFAULT, start_process, fn_copy); //（原版传file_name肯定不对）
   free (fn_copy2);
 
   if (tid == TID_ERROR){
@@ -51,7 +51,9 @@ process_execute (const char *file_name)
   }
 
   /* Sema down the parent process, waiting for child */
+  //这个改变在start_process里面
   sema_down(&thread_current()->sema);
+
   if (!thread_current()->success) return TID_ERROR;
 
   return tid;
@@ -80,10 +82,10 @@ push_argument (void **esp, int argc, int argv[]){
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void *file_name_)//传入的是包含程序名的完整命令
 {
   char *file_name = file_name_;
-  struct intr_frame if_;
+  struct intr_frame if_;//终端帧
   bool success;
 
   char *fn_copy=malloc(strlen(file_name)+1);
@@ -95,25 +97,27 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
+  //这里增加了两行
   char *token, *save_ptr;
   file_name = strtok_r (file_name, " ", &save_ptr);
+
   success = load (file_name, &if_.eip, &if_.esp);
 
-  if (success){
+  if (success){//装载成功
     /* Our implementation for Task 1:
       Calculate the number of parameters and the specification of parameters */
     int argc = 0;
     /* The number of parameters can't be more than 50 in the test case */
     int argv[50];
-    for (token = strtok_r (fn_copy, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
-      if_.esp -= (strlen(token)+1);
+    for (token = strtok_r (fn_copy, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){//strtok_r函数用于分析出参数，后面的调用要首个参数填null
+      if_.esp -= (strlen(token)+1);//栈指针递减
       memcpy (if_.esp, token, strlen(token)+1);
       argv[argc++] = (int) if_.esp;
     }
-    push_argument (&if_.esp, argc, argv);
+    push_argument (&if_.esp, argc, argv);//在这里使用了之前写的push函数
     /* Record the exec_status of the parent thread's success and sema up parent's semaphore */
     thread_current ()->parent->success = true;
-    sema_up (&thread_current ()->parent->sema);
+    sema_up (&thread_current ()->parent->sema);//表示start_process结束
   }
 
   /* If load failed, quit. */
